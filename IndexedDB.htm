@@ -1,0 +1,160 @@
+﻿
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>IndexedDB</title>
+    <style type="text/css">
+        #setkey
+        {
+            width: 464px;
+        }
+        #setvalue
+        {
+            width: 400px;
+        }
+        #setvalue2
+        {
+            width: 421px;
+        }
+    </style>
+</head>
+<body>
+    <div class="pURL">
+        <header>
+            <div id="title">
+                <h1>IndexedDBアプリケーション</h1>
+            </div>
+        </header>
+        <section>
+            以下のキーバリューをすべて入力して設定ボタンをクリックしてください。<br />
+            ページタイトル（キー）<input type="text" id="setkey" /><br />
+            ブックマークコメント（バリュー）<input type="text" id="setvalue" /><br />
+            ブックマークURL（バリュー）<input type="text" id="setvalue2" />
+            <input type="button" id="set" value="設定" /><hr />
+            取得したい値のキーを入力してください。<input type="text" id="getkey" />
+            <input type="button" id="show" value="値の取得" />
+            <input type="button" id="showIndex" value="アルファベットで始まるページタイトル一覧の取得" />
+            <ul id="list">
+            </ul>
+            <script>
+            var version = "1.1";
+            var db;
+
+            // ①IndexedDBの実装チェックとプレフィックスやイベントハンドラの登録
+            if (window.indexedDB || window.webkitIndexedDB || window.mozIndexedDB) {
+                window.alert("このブラウザではindexedDB は利用できます");
+                var indexedDB = window.indexedDB || window.webkitIndexedDB || window.mozIndexedDB;
+                var IDBTransaction = window.IDBTransaction || window.webkitIDBTransaction || window.mozIDBTransaction;
+                var IDBKeyRange = window.IDBKeyRange || window.webkitIDBKeyRange || window.mozIDBKeyRange;
+                var IDBCursor = window.IDBCursor || window.webkitIDBCursor; 
+                document.getElementById("set").addEventListener("click", setvalue, false);
+                document.getElementById("show").addEventListener("click", showvalue, false);
+                document.getElementById("showIndex").addEventListener("click", showindex, false);
+                // ②IndexedDBにアクセス
+                var IDBreq = indexedDB.open("uecdev");
+            } else {
+                window.alert("このブラウザではindexedDB は利用できません");
+            }
+
+            // IndexedDBアクセス失敗時
+            IDBreq.onerror = function (event) {
+                console.log("DB接続エラー", event);
+            }
+            // IndexedDBアクセス成功時
+            IDBreq.onsuccess = function (event) {
+                console.log("DB接続完了", event);
+                db = this.result;
+
+                // ③IndexedDBのバージョンチェック　
+                if (version != db.version) {
+
+                    // IndexedDBにバージョンをセット
+                    var setVrequest = db.setVersion(version);
+
+                    // バージョンセット成功時
+                    setVrequest.onsuccess = function (event) {
+                        console.log("バージョン設定成功", event);
+                        // ④オブジェクトストアの作成並びにインデックスの作成
+                        var store = db.createObjectStore("Name", { keyPath: "BookmarkKey", autoIncrement: false });
+                        var index = store.createIndex("BookmarkKey", "BookmarkKey");
+                        console.log(this.result);
+                        // ⑤トランザクションを利用してオブジェクトの保存
+                        var trans = db.transaction("Name", IDBTransaction.READ_WRITE);
+                        var store2 = trans.objectStore("Name");
+                        var data = { BookmarkKey: "人気順に説明する初めてのHTML5開発", Comment: "HTML5開発の基礎について執筆した連載のIndex", URL: "http://www.atmarkit.co.jp/fdotnet/chushin/introhtml5_index/index.html" };
+                        var req = store2.put(data);
+                        console.log(req);
+                    }
+
+                    // バージョンセット失敗時
+                    setVrequest.onerror = function (event) {
+                        console.log("バージョン設定エラー", event);
+                    }
+                }
+            }
+
+            // 値の保存
+            function setvalue(event) {
+                var key = document.getElementById("setkey").value;
+                var value = document.getElementById("setvalue").value;
+                var value2 = document.getElementById("setvalue2").value;
+                // ⑤トランザクションを利用してオブジェクトの保存
+                var trans = db.transaction("Name", IDBTransaction.READ_WRITE);
+                var store = trans.objectStore("Name"); 
+                var data = { BookmarkKey: key, Comment: value, URL: value2 };
+                var request = store.put(data);
+                console.log(request);
+                document.getElementById("setkey").value = "";
+                document.getElementById("setvalue").value = "";
+                document.getElementById("setvalue2").value = "";
+            }
+
+            // 値の取得
+            function showvalue(event) {
+                var key = document.getElementById("getkey").value;
+                // ⑥トランザクションを利用してオブジェクトの取得
+                var trans = db.transaction("Name", IDBTransaction.READ_WRITE);
+                var store = trans.objectStore("Name");
+                var req = store.get(key);
+                var ul = document.getElementById("list");
+                console.log(req);
+                req.onsuccess = function (event) {
+                    if (this.result == null) {
+                        alert("そのキーで保存されているブックマークはありません");
+                    } else {
+                        ul.innerHTML += "<li><a href='" + this.result.URL + "' >[" + this.result.BookmarkKey + "]</a>" + this.result.Comment + "</li>";
+                        console.log(this.result);
+                    }
+                }
+            }
+
+            // インデックスを使用した値の取得
+            function showindex(event) {
+                // ⑦レンジの作成
+                var range = IDBKeyRange.bound("A","Z");
+                var trans = db.transaction("Name", IDBTransaction.READ_WRITE);
+                var store = trans.objectStore("Name");
+                // ⑧インデックスからデータを検索し取得
+                var req = store.index("BookmarkKey").openCursor(range, IDBCursor.NEXT);
+                var ul = document.getElementById("list");
+                console.log(req);
+                req.onsuccess = function (event) {
+                    if (this.result == null) {
+                        console.log("ありません");
+                    } else {
+                        ul.innerHTML += "<li><a href='" + this.result.value.URL + "'>[" + this.result.value.BookmarkKey + "]</a>" + this.result.value.Comment + "</li>";
+                        console.log(this.result);
+                        // 次の検索結果でonsuccessコールバック関数を呼び出す
+                        this.result.continue();
+                    }
+                }
+            }
+            </script>
+        </section>
+        <footer>
+            </footer>
+    </div>
+</body>
+</html>
+
